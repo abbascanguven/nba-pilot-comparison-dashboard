@@ -1,0 +1,19 @@
+# Grafiklerde işaretlenecek önemli tarihler.
+#
+# Her kayıt için [[tarih]] bloğu ekleyin:
+#   gun      : "GG.AA.YYYY" biçiminde tarih (zorunlu)
+#   baslik   : grafikte kısa etiket olarak görünür (zorunlu)
+#   aciklama : fareyle üzerine gelince görünen detay (isteğe bağlı)
+#
+# Dosya her sayfa yenilemesinde tekrar okunur; değişiklik için uygulamayı yeniden başlatmak gerekmez.
+# Aşağıdaki iki kayıt ÖRNEKTİR, kendi tarihlerinizle değiştirin veya silin.
+
+[[tarih]]
+gun = "01.09.2026"
+baslik = "Örnek: Kampanya başlangıcı"
+aciklama = "Kredi kartı kampanyası tüm kanallarda yayına alındı."
+
+[[tarih]]
+gun = "15.09.2026"
+baslik = "Örnek: Model güncellemesi"
+aciklama = "NBA skor modeli yeni versiyona geçirildi."
