@@ -173,11 +173,35 @@ def render(ctx: Context) -> None:
     actions, action_errors = load_actions()
     for msg in event_errors + action_errors:
         st.warning(msg)
+
+    # Grafik işaret gruplarını aç/kapa. Sadece grafikteki çizimleri etkiler; hariç tutmanın
+    # hesaplamaya etkisi sol menüdeki "Hariç tutulan tarihleri çıkar" seçeneğine bağlıdır.
+    marker_groups = {
+        "📌 Önemli tarihler": events,
+        "⚠️ İş birimi aksiyonları": actions,
+        "⛔ Hariç tutulan tarihler": ctx.exclusions,
+    }
+    with st.sidebar:
+        shown = st.pills(
+            "Grafik işaretleri",
+            list(marker_groups),
+            selection_mode="multi",
+            default=list(marker_groups),
+            key="marker_groups",
+            help="Grafiklerde gösterilecek işaret gruplarını seçin. Kapatılan grup yalnızca grafikten kalkar, "
+            "hesaplamalar değişmez.",
+        )
+    chart_events, chart_actions, chart_exclusions = (
+        marker_groups[name] if name in shown else None for name in marker_groups
+    )
+    # Tüm zaman grafiklerine aynı işaretler gider.
+    marks = dict(ref_date=ref_date, events=chart_events, exclusions=chart_exclusions, actions=chart_actions)
+
     st.subheader("Satış oranı")
     st.plotly_chart(
         charts.time_lines(
             daily_plot, "satis_oran", "Satış oranı", ".2%", ".3%",
-            from_zero=False, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions,
+            from_zero=False, **marks,
         ),
         width="stretch",
     )
@@ -186,26 +210,25 @@ def render(ctx: Context) -> None:
     st.plotly_chart(
         charts.time_lines(
             daily_plot, "satis", "Satış adedi", ",d", ",d",
-            from_zero=True, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions,
+            from_zero=True, **marks,
         ),
         width="stretch",
     )
 
     with st.expander("Satış lift (Pilot / NBA)", expanded=False):
         st.plotly_chart(
-            charts.lift_line(daily_plot, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions),
+            charts.lift_line(daily_plot, **marks),
             width="stretch",
         )
 
     with st.expander("Satış adet farkı (Pilot − NBA)", expanded=False):
         st.caption(
-            "0 çizgisinin üstü: o gün Pilot daha fazla satış yaptı (mavi nokta). Altı: NBA daha fazla satış yaptı (turuncu nokta). "
-            "Pilot ve NBA kitle büyüklükleri farklıysa adet farkı yanıltıcı olabilir; oranlar için yukarıdaki grafiklere bakın."
+            "0 çizgisinin üstü: o gün Pilot daha fazla satış yaptı (mavi nokta). "
+            "Altı: NBA daha fazla satış yaptı (turuncu nokta). Pilot ve NBA kitle büyüklükleri farklıysa "
+            "adet farkı yanıltıcı olabilir; oranlar için yukarıdaki grafiklere bakın."
         )
         st.plotly_chart(
-            charts.count_diff_line(
-                daily_plot, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions
-            ),
+            charts.count_diff_line(daily_plot, **marks),
             width="stretch",
         )
 
@@ -217,7 +240,7 @@ def render(ctx: Context) -> None:
         st.plotly_chart(
             charts.time_lines(
                 daily_plot, "yanitlayan", "Yanıtlayan adedi", ",d", ",d",
-                from_zero=True, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions,
+                from_zero=True, **marks,
             ),
             width="stretch",
         )

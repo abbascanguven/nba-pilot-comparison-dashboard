@@ -186,6 +186,7 @@ Sayfa değiştirdiğinizde bu filtrelerin seçimleri korunur.
   - *Bir önceki gün*: Son günün değerleri bir önceki günle karşılaştırılır.
   - *Seçilen gün*: Açılan **Referans günü** listesinden istediğiniz günü seçersiniz. Özet kartlarındaki değişimler o güne göre hesaplanır ve o gün grafiklerde gri noktalı çizgiyle işaretlenir.
   - *Son günlerin ortalaması* (**varsayılan**): Son gün, kendisinden önceki N günün ortalamasıyla karşılaştırılır. N, **Ortalama alınacak gün sayısı** alanından seçilir (varsayılan 30). Referans aralığı grafiklerde gri bantla gösterilir. Hariç tutulan günler ortalamaya girmez.
+- **Grafik işaretleri:** 📌 Önemli tarihler, ⚠️ İş birimi aksiyonları ve ⛔ Hariç tutulan tarihler gruplarını ayrı ayrı açıp kapatır. Varsayılan olarak üçü de açıktır. Kapatılan grup yalnızca grafiklerden kalkar; hesaplamalar ve grafiklerin altındaki listeler değişmez. Hariç tutmanın hesaplamaya etkisi sol menüdeki **Hariç tutulan tarihleri çıkar** seçeneğine bağlıdır.
 - **Özet kartları:** Son günün Pilot/NBA satış oranı, satış lift ve satış adetleri. Kartın yanındaki **?** simgesinin üzerine gelince referans günün değeri görünür.
 - **Grafikler:**
   - *Satış oranı*: Pilot ve NBA karşılaştırmalı.
@@ -531,6 +532,7 @@ Filtreler `app.py` içinde **aşağıdaki sırayla** uygulanır. Her filtre bir 
 - **İş birimi aksiyonları (kehribar, ⚠️):** `config/is_birimi_aksiyonlari.toml` dosyasındaki aksiyonlar. Tek gün kesikli çizgi, dönem gölgeli bant olarak çizilir. Grafikte görünen aralıkla kesişen kısmı gösterilir.
 - **Önemli tarihler (mor, kesikli, 📌):** `config/onemli_tarihler.toml` dosyasındaki tarihler, grafikte gösterilen ilk ve son gün arasındaysa çizilir. Aynı güne ait birden fazla kayıt tek işarette birleşir.
 - **Hariç tutulan tarihler (kırmızı, ⛔):** Tek gün kırmızı kesikli çizgi, aralık kırmızı gölgeli bant olarak çizilir. Seçenek açıksa bu günlerin değerleri boş bırakılır ve çizgi kesilir. Tarih aralığı seçicisi ve "son gün" hesabı hariç tutulan günleri de kapsar, ancak son gün ve referans günü yalnızca verisi olan günlerden seçilir.
+- **Grafik işaretleri filtresi:** Sol menüdeki seçimde kapatılan grup grafiklere hiç gönderilmez; çizgisi, bandı, simgesi ve hover notu çizilmez. Hesaplamalara etkisi yoktur. Hariç tutulan tarihlerin işareti kapatılsa bile, **Hariç tutulan tarihleri çıkar** açıksa o günler hesaplamadan çıkarılmaya ve grafikte boşluk olarak görünmeye devam eder.
 - **Simgelerin yerleşimi (çakışma önleme):**
   - Her işaret türünün çizim alanının üstünde **kendi satırı** vardır. Alttan yukarıya: 📌 önemli tarihler, ⛔ hariç tutulan tarihler, ⚠️ iş birimi aksiyonları. Grafikte hiç kaydı olmayan türün satırı atlanır, diğerleri aşağı kayar. Bu yüzden farklı türler aynı güne düşse bile simgeleri üst üste binmez.
   - Aralık kayıtlarının (⛔, ⚠️) simgesi aralığın ortasına konur. Aralığın yalnızca bir kısmı görünüyorsa görünen kısmın ortasına konur.
