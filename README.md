@@ -14,7 +14,7 @@ Pilot ve NBA'in satış oranlarını, satış adetlerini ve olumlu yanıt oranla
 3. [Bağlantı ayarları (.env)](#3-bağlantı-ayarları-env)
 4. [Streamlit'i ayağa kaldırma](#4-streamliti-ayağa-kaldırma)
 5. [Dashboard'u kullanma](#5-dashboardu-kullanma)
-6. [Önemli tarihleri girme](#6-önemli-tarihleri-girme)
+6. [Önemli ve hariç tutulan tarihleri girme](#6-önemli-ve-hariç-tutulan-tarihleri-girme)
 7. [Hesaplamalar ve filtreler (detaylı)](#7-hesaplamalar-ve-filtreler-detaylı)
 8. [Sorun giderme](#8-sorun-giderme)
 9. [Proje yapısı](#9-proje-yapısı)
@@ -175,6 +175,7 @@ Oracle'daki tablo güncellendiyse sol menüdeki **Veriyi yenile** butonuna bası
 | **Model durumu** | Tümü / Modelli (`MODEL_FLAG = 1`) / Modelsiz. |
 | **Model** | Bir veya birden fazla model seçer. Boş bırakılırsa hepsi dahil olur. |
 | **Aksiyon grup kodu** | `ACTION_GROUP_CODE` ile bir veya birden fazla aksiyon grubu seçer (ör. `1001 · Banka Kartı Satış`). Kod ya da açıklama yazılarak aranabilir. Boş bırakılırsa hepsi dahil olur. |
+| **Hariç tutulan tarihleri çıkar** | Açıkken `config/haric_tutulan_tarihler.toml` dosyasındaki tarihlere denk gelen veriler tüm hesaplamalardan çıkarılır (bkz. [6.2](#62-hariç-tutulan-tarihler)). Yalnızca dosyada en az bir kayıt varsa görünür. Varsayılan: kapalı. |
 
 Sayfa değiştirdiğinizde bu filtrelerin seçimleri korunur.
 
@@ -184,11 +185,14 @@ Sayfa değiştirdiğinizde bu filtrelerin seçimleri korunur.
 - **Karşılaştırma referansı:**
   - *Bir önceki gün*: Son günün değerleri bir önceki günle karşılaştırılır.
   - *Seçilen gün*: Açılan **Referans günü** listesinden istediğiniz günü seçersiniz. Özet kartlarındaki değişimler o güne göre hesaplanır ve o gün grafiklerde gri noktalı çizgiyle işaretlenir.
+  - *Son günlerin ortalaması* (**varsayılan**): Son gün, kendisinden önceki N günün ortalamasıyla karşılaştırılır. N, **Ortalama alınacak gün sayısı** alanından seçilir (varsayılan 30). Referans aralığı grafiklerde gri bantla gösterilir. Hariç tutulan günler ortalamaya girmez.
 - **Özet kartları:** Son günün Pilot/NBA satış oranı, satış lift ve satış adetleri. Kartın yanındaki **?** simgesinin üzerine gelince referans günün değeri görünür.
 - **Grafikler:**
   - *Satış oranı*: Pilot ve NBA karşılaştırmalı.
   - *Satış adedi*: Pilot ve NBA karşılaştırmalı.
   - *Satış lift*: Açılır bölümde.
+  - *Satış adet farkı (Pilot − NBA)*: Açılır bölümde. `Pilot satış − NBA satış` farkının günlük çizgi grafiği. 0'ın üstü (mavi nokta): Pilot daha fazla satmış, altı (turuncu nokta): NBA daha fazla satmış.
+  - *Yanıtlayan adedi (Pilot ve NBA)*: Açılır bölümde. Seçili baza göre (Tekil / Toplam) günlük yanıtlayan sayıları. Satış oranlarının paydasıdır.
 
   Grafiklerde bir günün üzerine gelince o günün tüm değerleri görünür. Sağ üstteki araçlarla yakınlaştırabilir veya grafiği PNG olarak indirebilirsiniz.
 - **Günlük değerler tablosu:** Açılır bölümde. **Excel için CSV indir** butonuyla dışa aktarılır.
@@ -207,7 +211,16 @@ Sayfa değiştirdiğinizde bu filtrelerin seçimleri korunur.
 
 ---
 
-## 6. Önemli tarihleri girme
+## 6. Önemli ve hariç tutulan tarihleri girme
+
+İki ayrı tarih listesi vardır:
+
+| Dosya | Grafikte | Hesaplamaya etkisi |
+|---|---|---|
+| `config/onemli_tarihler.toml` | Mor kesikli çizgi + 📌 | Yok, sadece bilgi amaçlı |
+| `config/haric_tutulan_tarihler.toml` | Kırmızı çizgi / kırmızı bant + ⛔ | Filtre açıkken bu tarihler hesaplamadan çıkarılır |
+
+### 6.1 Önemli tarihler
 
 Kampanya başlangıcı, model değişikliği gibi olayları trend grafiklerinde işaretlemek için [`config/onemli_tarihler.toml`](config/onemli_tarihler.toml) dosyasını düzenleyin. Her tarih için bir blok ekleyin:
 
@@ -233,6 +246,47 @@ baslik = "Model güncellemesi"
 - Dosya her sayfa yenilemesinde tekrar okunur. Kaydettikten sonra tarayıcıyı yenilemeniz yeterlidir, dashboard'u yeniden başlatmanız gerekmez.
 - Hatalı bir kayıt (yanlış tarih biçimi, eksik başlık) atlanır ve sayfada uyarı gösterilir.
 - Metin içinde çift tırnak kullanmanız gerekirse tek tırnakla yazın: `baslik = 'Kampanya "Yaz"'`
+
+### 6.2 Hariç tutulan tarihler
+
+Sistem kesintisi, veri yükleme hatası gibi sonuçları bozan günleri [`config/haric_tutulan_tarihler.toml`](config/haric_tutulan_tarihler.toml) dosyasına girin. Her kayıt **tek bir gün** ya da **bir aralık** olabilir:
+
+```toml
+# Tek gün
+[[haric]]
+gun = "05.09.2026"
+baslik = "Sistem kesintisi"
+aciklama = "Kampanya motoru gün boyu çalışmadı."
+
+# Aralık (başlangıç ve bitiş günleri dahil)
+[[haric]]
+baslangic = "10.09.2026"
+bitis = "12.09.2026"
+baslik = "Veri yükleme hatası"
+```
+
+| Alan | Zorunlu mu? | Açıklama |
+|---|---|---|
+| `gun` | Tek gün için | `GG.AA.YYYY` |
+| `baslangic`, `bitis` | Aralık için | `GG.AA.YYYY`. İki gün de aralığa dahildir. `bitis`, `baslangic`'tan önce olamaz. |
+| `baslik` | Evet | Kısa başlık |
+| `aciklama` | Hayır | Üzerine gelince görünen detay |
+
+**Grafiklerde görünüm:**
+- Tek gün: kırmızı kesikli dikey çizgi.
+- Aralık: kırmızı gölgeli bant, iki kenarında kırmızı kesikli çizgi.
+- Üstteki ⛔ simgesinin üzerine gelince başlık, tarih(ler) ve açıklama görünür.
+- İşaretler filtre açık da olsa kapalı da olsa her zaman gösterilir.
+
+**Sol menüdeki "Hariç tutulan tarihleri çıkar" seçeneği:**
+- **Açık:** Bu tarihlere denk gelen veriler özet kartlarından, grafiklerden, tablolardan ve Dönem Karşılaştırması sayfasından çıkarılır. Trend grafiklerinde bu günler **boşluk** olarak görünür, çizgi o günlerde kesilir. Seçeneğin altında kaç günün çıkarıldığı yazar.
+- **Kapalı (varsayılan):** Veriler hesaplamaya dahil edilir. Kırmızı işaretler yine de görünür, üzerine gelince o günün değerlerinin yanında hariç tutma notu da çıkar.
+
+> **7 günlük periyotta dikkat:** 7 günlük değerler Oracle'da hazır toplam olarak gelir, bir pencerenin içinden tek bir gün çıkarılamaz. Bu yüzden hariç tutulan bir günü **içeren tüm pencereler** çıkarılır. Örneğin 05.09 hariç tutulursa, 05.09–11.09 arasında biten 7 pencerenin hepsi hesaplamadan çıkar. 1 günlük periyotta ise yalnızca o gün çıkar.
+
+- Dosya her sayfa yenilemesinde tekrar okunur, dashboard'u yeniden başlatmanız gerekmez.
+- Hatalı bir kayıt (yanlış tarih biçimi, eksik başlık, ters aralık) atlanır ve sol menüde uyarı gösterilir.
+- Grafiklerin altındaki **⛔ Hariç tutulan tarihler** bölümü, seçili aralıktaki kayıtları ve seçeneğin şu anki durumunu gösterir.
 
 ---
 
@@ -379,6 +433,7 @@ Filtreler `app.py` içinde **aşağıdaki sırayla** uygulanır. Her filtre bir 
 | 4 | **Model durumu** | *Tümü*: filtre yok. *Modelli*: `MODEL_FLAG = 1`. *Modelsiz*: `MODEL_FLAG ≠ 1` (boş olanlar dahil). |
 | 5 | **Model** | Seçilen `MEVCUT_MODEL_KIMLIGI` değerleri tutulur. Liste, önceki adımlardan sonra kalan modellerden oluşur. Boş bırakılırsa filtre uygulanmaz. |
 | 6 | **Aksiyon grup kodu** | Seçilen `ACTION_GROUP_CODE` değerleri tutulur. Liste, önceki adımlardan sonra kalan kodlardan oluşur ve sayısal sıralıdır (1001, 1002, 2004 …). Boş bırakılırsa filtre uygulanmaz. |
+| 7 | **Hariç tutulan tarihleri çıkar** | Açıkken, hesaplama penceresi hariç tutulan bir tarihe değen satırlar atılır. Koşul: `FIRST_OFFER_DATE ≤ hariç bitiş` **ve** `LAST_OFFER_DATE ≥ hariç başlangıç`. `FIRST_OFFER_DATE` boşsa `LAST_OFFER_DATE` kullanılır. 1 günlük periyotta bu, günün kendisinin hariç olması demektir. 7 günlük periyotta o günü içeren tüm pencereler atılır. |
 
 - **Filtre listeleri birbirine bağlıdır.** Örneğin *Modelli* seçiliyken Model ve Aksiyon grup kodu listelerinde yalnızca modeli olan kayıtlar çıkar.
 - **Seçimler sayfalar arasında korunur.**
@@ -400,6 +455,23 @@ Filtreler `app.py` içinde **aşağıdaki sırayla** uygulanır. Her filtre bir 
 - **Referans adayları:** Son günden önceki, verisi olan tüm günler. Tarih aralığının dışında kalan günler de aday olabilir. Sol menüdeki diğer filtreler ise referans günü için de geçerlidir.
 - **Bir önceki gün:** Son günden önceki, *verisi olan* en yakın gün. Takvimde bir gün eksikse ondan önceki gün alınır.
 - **Seçilen gün:** Listeden seçilen gün.
+- **Son günlerin ortalaması:** Son günden önceki N takvim günü (varsayılan 30). Örneğin son gün 22.09 ve N = 30 ise referans aralığı **23.08 – 21.09**'dur. Son gün aralığa dahil değildir. Referans değerleri şöyle hesaplanır:
+
+  ```
+  Referans aralığındaki satırlar  = LAST_OFFER_DATE, [son gün − N, son gün − 1] arasında olanlar
+  G                               = bu aralıkta verisi olan gün sayısı
+                                    (verisi olmayan ve hariç tutulan günler sayılmaz)
+
+  Referans satış oranı  = Σ satış / Σ yanıtlayan          (ağırlıklı ortalama, bkz. 7.3)
+  Referans satış lift   = Referans P satış oranı / Referans N satış oranı
+  Referans satış adedi  = Σ satış / G                     (günlük ortalama adet)
+  ```
+
+  Oranlar günlük oranların basit ortalaması değildir. Aralıktaki toplam adetlerden hesaplanır, böylece kalabalık günler daha fazla ağırlık taşır. Referans lift de günlük lift değerlerinin ortalaması değildir, ortalama oranlardan hesaplanır.
+
+  Örnek (sentetik test verisi, 1 günlük, Tekil, hariç tutma açık): referans aralığı 23.08 – 21.09, 25 günün verisi. Referans lift 1,066, son günün lift değeri 1,126, değişim **+0,060**. Referans günlük Pilot satış 4.545, son gün 5.177, değişim **+632**.
+
+  > 7 günlük periyotta her gün zaten 7 günlük bir pencere olduğu için referans, son N günde biten pencerelerin ortalamasıdır. Adetler 7 günlük pencere toplamlarının ortalaması olur.
 
 **Özet kartlarındaki değişimler:** Hepsi son gün ile referans günü arasındaki farktır.
 
@@ -415,8 +487,10 @@ Filtreler `app.py` içinde **aşağıdaki sırayla** uygulanır. Her filtre bir 
 - Kartın yanındaki **?** simgesi, referans günündeki değeri gösterir.
 
 **Grafik işaretleri**
-- **Referans çizgisi (gri, noktalı):** Referans günü seçili tarih aralığındaysa çizilir.
+- **Referans çizgisi (gri, noktalı):** Referans tek bir günse ve seçili tarih aralığındaysa çizilir.
+- **Referans bandı (gri, "Referans (ort.)"):** "Son günlerin ortalaması" seçiliyken referans aralığını gösterir. Aralığın yalnızca grafikte görünen kısmı boyanır.
 - **Önemli tarihler (mor, kesikli, 📌):** `config/onemli_tarihler.toml` dosyasındaki tarihler, grafikte gösterilen ilk ve son gün arasındaysa çizilir. Aynı güne ait birden fazla kayıt tek işarette birleşir.
+- **Hariç tutulan tarihler (kırmızı, ⛔):** Tek gün kırmızı kesikli çizgi, aralık kırmızı gölgeli bant olarak çizilir. Seçenek açıksa bu günlerin değerleri boş bırakılır ve çizgi kesilir. Tarih aralığı seçicisi ve "son gün" hesabı hariç tutulan günleri de kapsar, ancak son gün ve referans günü yalnızca verisi olan günlerden seçilir.
 - **Satış oranı grafiğinin** y ekseni veriye göre ölçeklenir ve 0'dan başlamaz, böylece küçük farklar görünür olur. **Satış adedi grafiği** 0'dan başlar.
 
 ### 7.9 Dönem Karşılaştırması sayfası
@@ -488,11 +562,12 @@ Tutulan gruplar: min_yanıtlayan ≥ eşik
 ```
 app.py                         Giriş noktası: sayfa gezinmesi ve ortak filtreler
 config/onemli_tarihler.toml    Grafiklerde işaretlenecek önemli tarihler
+config/haric_tutulan_tarihler.toml  Kırmızı işaretlenen, istenirse hesaplamadan çıkarılan tarihler
 nba_dashboard/
   data.py                      Oracle / dosyadan veri okuma ve temizleme
   metrics.py                   Oran, lift ve anlamlılık hesapları
   charts.py                    Plotly grafikleri
-  events.py                    Önemli tarihleri okuma
+  events.py                    Önemli / hariç tutulan tarihleri okuma ve hariç tutma kuralı
   formatting.py                Türkçe sayı biçimleri
   views/trend.py               Günlük Trend sayfası
   views/comparison.py          Dönem Karşılaştırması sayfası

@@ -1,0 +1,25 @@
+# Hesaplamadan çıkarılabilecek tarihler (ör. sistem arızası, veri sorunu, olağandışı günler).
+#
+# Bu tarihler grafiklerde KIRMIZI ile işaretlenir. Sol menüdeki "Hariç tutulan tarihleri çıkar"
+# seçeneği açıkken bu tarihlere denk gelen veriler tüm hesaplamalardan çıkarılır.
+#
+# Her kayıt için [[haric]] bloğu ekleyin. Tek gün için `gun`, aralık için `baslangic` + `bitis` yazın:
+#   gun        : "GG.AA.YYYY"  (tek gün)
+#   baslangic  : "GG.AA.YYYY"  (aralığın ilk günü, dahil)
+#   bitis      : "GG.AA.YYYY"  (aralığın son günü, dahil)
+#   baslik     : kısa açıklama (zorunlu)
+#   aciklama   : fareyle üzerine gelince görünen detay (isteğe bağlı)
+#
+# Dosya her sayfa yenilemesinde tekrar okunur; değişiklik için uygulamayı yeniden başlatmak gerekmez.
+# Aşağıdaki iki kayıt ÖRNEKTİR, kendi tarihlerinizle değiştirin veya silin.
+
+[[haric]]
+gun = "05.09.2026"
+baslik = "Örnek: Sistem kesintisi"
+aciklama = "Kampanya motoru gün boyu çalışmadı."
+
+[[haric]]
+baslangic = "10.09.2026"
+bitis = "12.09.2026"
+baslik = "Örnek: Veri yükleme hatası"
+aciklama = "Bu üç günün yanıt verileri eksik yüklendi."

@@ -13,6 +13,7 @@ import streamlit as st
 
 from nba_dashboard.context import Context
 from nba_dashboard.data import load_data
+from nba_dashboard.events import load_exclusions, overlaps_exclusion
 from nba_dashboard.views import comparison, trend
 
 st.set_page_config(page_title="NBA Pilot Karşılaştırma", page_icon="📊", layout="wide")
@@ -98,6 +99,29 @@ with st.sidebar:
     if chosen_codes:
         df = df[df["ACTION_GROUP_CODE"].isin(chosen_codes)]
 
+    exclusions, exclusion_errors = load_exclusions()
+    for msg in exclusion_errors:
+        st.warning(msg)
+    removed_dates: tuple[pd.Timestamp, ...] = ()
+    exclude = False
+    if not exclusions.empty:
+        exclude = st.toggle(
+            "Hariç tutulan tarihleri çıkar",
+            value=False,
+            key="exclude",
+            help=(
+                "config/haric_tutulan_tarihler.toml dosyasındaki tarihlere denk gelen veriler tüm "
+                "hesaplamalardan çıkarılır. 7 günlük periyotta, o tarihleri içeren tüm pencereler çıkarılır."
+            ),
+        )
+        if exclude:
+            hit = overlaps_exclusion(df, exclusions)
+            removed_dates = tuple(pd.DatetimeIndex(df.loc[hit, "LAST_OFFER_DATE"].dropna().unique()).sort_values())
+            df = df[~hit]
+            st.caption(f"🔴 {len(exclusions)} tarih kaydı tanımlı · {len(removed_dates)} gün hesaplamadan çıkarıldı")
+        else:
+            st.caption(f"🔴 {len(exclusions)} tarih kaydı tanımlı · hesaplamaya dahil")
+
     if st.button("Veriyi yenile", width="stretch"):
         get_data.clear()
         st.rerun()
@@ -109,5 +133,8 @@ ctx = Context(
     basis_label=basis_label,
     period_days=int(period_days),
     source_label=source_label,
+    exclusions=exclusions,
+    exclude_active=exclude,
+    removed_dates=removed_dates,
 )
 page.run()

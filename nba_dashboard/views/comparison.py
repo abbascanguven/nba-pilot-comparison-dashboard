@@ -46,6 +46,10 @@ def render(ctx: Context) -> None:
             st.warning("Seçili filtrelerle eşleşen kayıt yok.")
             st.stop()
         period = st.selectbox("Dönem", periods, help="Varsayılan: en güncel dönem")
+        if ctx.removed_dates:
+            st.caption(
+                f"🔴 Hariç tutulan tarihlere denk gelen {len(ctx.removed_dates)} dönem listede yer almıyor."
+            )
         min_resp = st.number_input(
             "Min. yanıtlayan (her iki grupta)",
             min_value=0,
