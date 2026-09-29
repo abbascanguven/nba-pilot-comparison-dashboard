@@ -7,7 +7,7 @@ import streamlit as st
 
 from nba_dashboard import charts
 from nba_dashboard.context import Context
-from nba_dashboard.events import load_events
+from nba_dashboard.events import load_actions, load_events
 from nba_dashboard.formatting import fmt_int, fmt_num, fmt_pct, fmt_points
 from nba_dashboard.metrics import compare
 
@@ -170,13 +170,14 @@ def render(ctx: Context) -> None:
 
     # ---------------------------------------------------------------- grafikler
     events, event_errors = load_events()
-    for msg in event_errors:
+    actions, action_errors = load_actions()
+    for msg in event_errors + action_errors:
         st.warning(msg)
     st.subheader("Satış oranı")
     st.plotly_chart(
         charts.time_lines(
             daily_plot, "satis_oran", "Satış oranı", ".2%", ".3%",
-            from_zero=False, ref_date=ref_date, events=events, exclusions=ctx.exclusions,
+            from_zero=False, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions,
         ),
         width="stretch",
     )
@@ -185,14 +186,14 @@ def render(ctx: Context) -> None:
     st.plotly_chart(
         charts.time_lines(
             daily_plot, "satis", "Satış adedi", ",d", ",d",
-            from_zero=True, ref_date=ref_date, events=events, exclusions=ctx.exclusions,
+            from_zero=True, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions,
         ),
         width="stretch",
     )
 
     with st.expander("Satış lift (Pilot / NBA)", expanded=False):
         st.plotly_chart(
-            charts.lift_line(daily_plot, ref_date=ref_date, events=events, exclusions=ctx.exclusions),
+            charts.lift_line(daily_plot, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions),
             width="stretch",
         )
 
@@ -203,7 +204,7 @@ def render(ctx: Context) -> None:
         )
         st.plotly_chart(
             charts.count_diff_line(
-                daily_plot, ref_date=ref_date, events=events, exclusions=ctx.exclusions
+                daily_plot, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions
             ),
             width="stretch",
         )
@@ -216,7 +217,7 @@ def render(ctx: Context) -> None:
         st.plotly_chart(
             charts.time_lines(
                 daily_plot, "yanitlayan", "Yanıtlayan adedi", ",d", ",d",
-                from_zero=True, ref_date=ref_date, events=events, exclusions=ctx.exclusions,
+                from_zero=True, ref_date=ref_date, events=events, exclusions=ctx.exclusions, actions=actions,
             ),
             width="stretch",
         )
@@ -228,7 +229,7 @@ def render(ctx: Context) -> None:
             st.caption("Seçili tarih aralığında önemli tarih yok.")
         else:
             st.dataframe(
-                visible_events,
+                visible_events[["tarih", "baslik", "aciklama"]],
                 hide_index=True,
                 width="stretch",
                 column_config={
@@ -239,6 +240,27 @@ def render(ctx: Context) -> None:
             )
         st.caption("Tarihler `config/onemli_tarihler.toml` dosyasından okunur.")
 
+    visible_actions = (
+        actions[(actions["bitis"] >= lo) & (actions["baslangic"] <= hi)] if not actions.empty else actions
+    )
+    with st.expander(f"⚠️ İş birimi aksiyonları ({len(visible_actions)})", expanded=False):
+        if visible_actions.empty:
+            st.caption("Seçili tarih aralığında iş birimi aksiyonu yok.")
+        else:
+            st.dataframe(
+                visible_actions[["baslangic", "bitis", "birim", "baslik", "aciklama"]],
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "baslangic": st.column_config.DateColumn("Başlangıç", format="DD.MM.YYYY"),
+                    "bitis": st.column_config.DateColumn("Bitiş", format="DD.MM.YYYY"),
+                    "birim": "İş birimi",
+                    "baslik": "Başlık",
+                    "aciklama": st.column_config.TextColumn("Açıklama", width="large"),
+                },
+            )
+        st.caption("Aksiyonlar `config/is_birimi_aksiyonlari.toml` dosyasından okunur. Hesaplamaları etkilemez.")
+
     excl = ctx.exclusions
     visible_excl = excl[(excl["bitis"] >= lo) & (excl["baslangic"] <= hi)] if not excl.empty else excl
     with st.expander(f"⛔ Hariç tutulan tarihler ({len(visible_excl)})", expanded=False):
@@ -246,7 +268,7 @@ def render(ctx: Context) -> None:
             st.caption("Seçili tarih aralığında hariç tutulan tarih yok.")
         else:
             st.dataframe(
-                visible_excl,
+                visible_excl[["baslangic", "bitis", "baslik", "aciklama"]],
                 hide_index=True,
                 width="stretch",
                 column_config={

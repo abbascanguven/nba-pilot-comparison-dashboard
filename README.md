@@ -175,7 +175,7 @@ Oracle'daki tablo güncellendiyse sol menüdeki **Veriyi yenile** butonuna bası
 | **Model durumu** | Tümü / Modelli (`MODEL_FLAG = 1`) / Modelsiz. |
 | **Model** | Bir veya birden fazla model seçer. Boş bırakılırsa hepsi dahil olur. |
 | **Aksiyon grup kodu** | `ACTION_GROUP_CODE` ile bir veya birden fazla aksiyon grubu seçer (ör. `1001 · Banka Kartı Satış`). Kod ya da açıklama yazılarak aranabilir. Boş bırakılırsa hepsi dahil olur. |
-| **Hariç tutulan tarihleri çıkar** | Açıkken `config/haric_tutulan_tarihler.toml` dosyasındaki tarihlere denk gelen veriler tüm hesaplamalardan çıkarılır (bkz. [6.2](#62-hariç-tutulan-tarihler)). Yalnızca dosyada en az bir kayıt varsa görünür. Varsayılan: kapalı. |
+| **Hariç tutulan tarihleri çıkar** | Açıkken `config/haric_tutulan_tarihler.toml` dosyasındaki tarihlere denk gelen veriler tüm hesaplamalardan çıkarılır (bkz. [6.3](#63-hariç-tutulan-tarihler)). Yalnızca dosyada en az bir kayıt varsa görünür. Varsayılan: kapalı. |
 
 Sayfa değiştirdiğinizde bu filtrelerin seçimleri korunur.
 
@@ -213,11 +213,12 @@ Sayfa değiştirdiğinizde bu filtrelerin seçimleri korunur.
 
 ## 6. Önemli ve hariç tutulan tarihleri girme
 
-İki ayrı tarih listesi vardır:
+Üç ayrı tarih listesi vardır:
 
 | Dosya | Grafikte | Hesaplamaya etkisi |
 |---|---|---|
 | `config/onemli_tarihler.toml` | Mor kesikli çizgi + 📌 | Yok, sadece bilgi amaçlı |
+| `config/is_birimi_aksiyonlari.toml` | Kehribar kesikli çizgi / kehribar bant + ⚠️ | Yok, sadece bilgi amaçlı |
 | `config/haric_tutulan_tarihler.toml` | Kırmızı çizgi / kırmızı bant + ⛔ | Filtre açıkken bu tarihler hesaplamadan çıkarılır |
 
 ### 6.1 Önemli tarihler
@@ -247,7 +248,45 @@ baslik = "Model güncellemesi"
 - Hatalı bir kayıt (yanlış tarih biçimi, eksik başlık) atlanır ve sayfada uyarı gösterilir.
 - Metin içinde çift tırnak kullanmanız gerekirse tek tırnakla yazın: `baslik = 'Kampanya "Yaz"'`
 
-### 6.2 Hariç tutulan tarihler
+### 6.2 İş birimi aksiyonları
+
+Kampanya, fiyat/faiz değişikliği, kanal aksiyonu gibi iş birimlerinin yaptığı aksiyonları [`config/is_birimi_aksiyonlari.toml`](config/is_birimi_aksiyonlari.toml) dosyasına girin. Her kayıt **tek bir gün** ya da **bir dönem** (tarih aralığı) olabilir:
+
+```toml
+# Tek günlük aksiyon
+[[aksiyon]]
+gun = "17.09.2026"
+baslik = "Mevduat faiz oranı güncellemesi"
+birim = "Hazine"
+aciklama = "Vadeli mevduat faiz oranları 1 puan artırıldı."
+
+# Belirli bir dönem süren aksiyon (başlangıç ve bitiş günleri dahil)
+[[aksiyon]]
+baslangic = "01.09.2026"
+bitis = "07.09.2026"
+baslik = "Kredi kartı aidat kampanyası"
+birim = "Kartlı Ödemeler"
+aciklama = "Yeni müşterilere ilk yıl aidatsız kart kampanyası."
+```
+
+| Alan | Zorunlu mu? | Açıklama |
+|---|---|---|
+| `gun` | Tek gün için | `GG.AA.YYYY`, **tırnak içinde** |
+| `baslangic`, `bitis` | Dönem için | `GG.AA.YYYY`, tırnak içinde. İki gün de dahildir. `bitis`, `baslangic`'tan önce olamaz. |
+| `baslik` | Evet | Kısa başlık |
+| `birim` | Hayır | Aksiyonu yapan iş birimi |
+| `aciklama` | Hayır | Üzerine gelince görünen detay |
+
+**Grafiklerde görünüm** (uyarı hissi veren kehribar renkte):
+- Tek gün: kehribar kesikli dikey çizgi.
+- Dönem: kehribar gölgeli bant, iki kenarında kehribar kesikli çizgi.
+- Üstteki **⚠️** simgesi kendi satırında durur, 📌 ve ⛔ ile aynı güne düşse bile üst üste binmez (bkz. 7.8, *Simgelerin yerleşimi*).
+- ⚠️ simgesinin ya da kapsanan günlerden birinin üzerine gelince başlık, tarih(ler), iş birimi ve açıklama görünür.
+- Grafiklerin altındaki **⚠️ İş birimi aksiyonları** bölümü, seçili aralıkla kesişen aksiyonları tablo olarak gösterir.
+- Hesaplamaları etkilemez. Dosya her sayfa yenilemesinde tekrar okunur.
+- Dosyada bir yazım hatası varsa (ör. tarihin tırnağı eksikse) **dosyanın tamamı** okunamaz ve sayfada sarı bir uyarı çıkar.
+
+### 6.3 Hariç tutulan tarihler
 
 Sistem kesintisi, veri yükleme hatası gibi sonuçları bozan günleri [`config/haric_tutulan_tarihler.toml`](config/haric_tutulan_tarihler.toml) dosyasına girin. Her kayıt **tek bir gün** ya da **bir aralık** olabilir:
 
@@ -489,8 +528,14 @@ Filtreler `app.py` içinde **aşağıdaki sırayla** uygulanır. Her filtre bir 
 **Grafik işaretleri**
 - **Referans çizgisi (gri, noktalı):** Referans tek bir günse ve seçili tarih aralığındaysa çizilir.
 - **Referans bandı (gri, "Referans (ort.)"):** "Son günlerin ortalaması" seçiliyken referans aralığını gösterir. Aralığın yalnızca grafikte görünen kısmı boyanır.
+- **İş birimi aksiyonları (kehribar, ⚠️):** `config/is_birimi_aksiyonlari.toml` dosyasındaki aksiyonlar. Tek gün kesikli çizgi, dönem gölgeli bant olarak çizilir. Grafikte görünen aralıkla kesişen kısmı gösterilir.
 - **Önemli tarihler (mor, kesikli, 📌):** `config/onemli_tarihler.toml` dosyasındaki tarihler, grafikte gösterilen ilk ve son gün arasındaysa çizilir. Aynı güne ait birden fazla kayıt tek işarette birleşir.
 - **Hariç tutulan tarihler (kırmızı, ⛔):** Tek gün kırmızı kesikli çizgi, aralık kırmızı gölgeli bant olarak çizilir. Seçenek açıksa bu günlerin değerleri boş bırakılır ve çizgi kesilir. Tarih aralığı seçicisi ve "son gün" hesabı hariç tutulan günleri de kapsar, ancak son gün ve referans günü yalnızca verisi olan günlerden seçilir.
+- **Simgelerin yerleşimi (çakışma önleme):**
+  - Her işaret türünün çizim alanının üstünde **kendi satırı** vardır. Alttan yukarıya: 📌 önemli tarihler, ⛔ hariç tutulan tarihler, ⚠️ iş birimi aksiyonları. Grafikte hiç kaydı olmayan türün satırı atlanır, diğerleri aşağı kayar. Bu yüzden farklı türler aynı güne düşse bile simgeleri üst üste binmez.
+  - Aralık kayıtlarının (⛔, ⚠️) simgesi aralığın ortasına konur. Aralığın yalnızca bir kısmı görünüyorsa görünen kısmın ortasına konur.
+  - Aynı satırda birbirine çok yakın simgeler **tek simgede birleşir** ve yanında adet yazar (ör. 📌³). Eşik, gösterilen tarih aralığının %2,8'idir: 30 günlük görünümde ardışık günler ayrı kalır, 1 yıllık görünümde yaklaşık 10 günden yakın simgeler birleşir. Birleşik simgenin üzerine gelince tüm kayıtlar alt alta listelenir.
+  - Çizgiler ve bantlar birleşmez. Her kayıt kendi çizgisi ya da bandıyla çizilmeye devam eder.
 - **Satış oranı grafiğinin** y ekseni veriye göre ölçeklenir ve 0'dan başlamaz, böylece küçük farklar görünür olur. **Satış adedi grafiği** 0'dan başlar.
 
 ### 7.9 Dönem Karşılaştırması sayfası
@@ -562,12 +607,13 @@ Tutulan gruplar: min_yanıtlayan ≥ eşik
 ```
 app.py                         Giriş noktası: sayfa gezinmesi ve ortak filtreler
 config/onemli_tarihler.toml    Grafiklerde işaretlenecek önemli tarihler
+config/is_birimi_aksiyonlari.toml   Grafiklerde ⚠️ ile işaretlenen iş birimi aksiyonları (gün ya da dönem)
 config/haric_tutulan_tarihler.toml  Kırmızı işaretlenen, istenirse hesaplamadan çıkarılan tarihler
 nba_dashboard/
   data.py                      Oracle / dosyadan veri okuma ve temizleme
   metrics.py                   Oran, lift ve anlamlılık hesapları
   charts.py                    Plotly grafikleri
-  events.py                    Önemli / hariç tutulan tarihleri okuma ve hariç tutma kuralı
+  events.py                    Önemli tarih / iş birimi aksiyonu / hariç tarih okuma, hariç tutma kuralı
   formatting.py                Türkçe sayı biçimleri
   views/trend.py               Günlük Trend sayfası
   views/comparison.py          Dönem Karşılaştırması sayfası

@@ -14,12 +14,19 @@
 # Aşağıdaki iki kayıt ÖRNEKTİR, kendi tarihlerinizle değiştirin veya silin.
 
 [[haric]]
-gun = "05.09.2026"
+baslangic = "04.09.2026"
+bitis = "06.09.2026"
 baslik = "Örnek: Sistem kesintisi"
-aciklama = "Kampanya motoru gün boyu çalışmadı."
+aciklama = "Kampanya motoru üç gün boyunca çalışmadı."
 
 [[haric]]
 baslangic = "10.09.2026"
 bitis = "12.09.2026"
 baslik = "Örnek: Veri yükleme hatası"
 aciklama = "Bu üç günün yanıt verileri eksik yüklendi."
+
+[[haric]]
+baslangic = "27.08.2026"
+bitis = "29.08.2026"
+baslik = "Örnek: Hafta sonu bakım çalışması"
+aciklama = "Teklif motoru bakım nedeniyle kısıtlı çalıştı; bu günler hesaplamadan çıkarılabilir."

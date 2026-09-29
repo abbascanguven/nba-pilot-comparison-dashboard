@@ -1,6 +1,7 @@
 """Config klasöründeki tarih listelerini okur.
 
 - config/onemli_tarihler.toml          → grafiklerde 📌 ile işaretlenen önemli tarihler
+- config/is_birimi_aksiyonlari.toml    → grafiklerde ⚠️ ile işaretlenen iş birimi aksiyonları (gün ya da aralık)
 - config/haric_tutulan_tarihler.toml   → kırmızıyla işaretlenen, istenirse hesaplamadan çıkarılan tarihler
 """
 
@@ -14,6 +15,7 @@ import pandas as pd
 from nba_dashboard.data import PROJECT_ROOT
 
 EVENTS_PATH = PROJECT_ROOT / "config" / "onemli_tarihler.toml"
+ACTIONS_PATH = PROJECT_ROOT / "config" / "is_birimi_aksiyonlari.toml"
 EXCLUSIONS_PATH = PROJECT_ROOT / "config" / "haric_tutulan_tarihler.toml"
 
 DATE_FORMAT = "%d.%m.%Y"
@@ -33,29 +35,39 @@ def _parse_day(value) -> pd.Timestamp:
     return pd.to_datetime(str(value or ""), format=DATE_FORMAT, errors="coerce")
 
 
-def load_events() -> tuple[pd.DataFrame, list[str]]:
-    """(tarih, baslik, aciklama) tablosu ve okunamayan kayıtlar için hata mesajları döner."""
-    empty = pd.DataFrame(columns=["tarih", "baslik", "aciklama"])
-    entries, errors = _read_entries(EVENTS_PATH, "tarih")
+def _load_day_entries(path: Path, key: str) -> tuple[pd.DataFrame, list[str]]:
+    """Tek günlük kayıtları (gun, baslik, aciklama, birim) okur."""
+    columns = ["tarih", "baslik", "aciklama", "birim"]
+    entries, errors = _read_entries(path, key)
 
     rows = []
     for i, entry in enumerate(entries, start=1):
         day = _parse_day(entry.get("gun"))
         title = str(entry.get("baslik", "")).strip()
         if pd.isna(day) or not title:
-            errors.append(f"{EVENTS_PATH.name}, {i}. kayıt atlandı: 'gun' (GG.AA.YYYY) ve 'baslik' zorunlu.")
+            errors.append(f"{path.name}, {i}. kayıt atlandı: 'gun' (GG.AA.YYYY) ve 'baslik' zorunlu.")
             continue
-        rows.append({"tarih": day, "baslik": title, "aciklama": str(entry.get("aciklama", "")).strip()})
-    return (pd.DataFrame(rows).sort_values("tarih") if rows else empty), errors
+        rows.append(
+            {
+                "tarih": day,
+                "baslik": title,
+                "aciklama": str(entry.get("aciklama", "")).strip(),
+                "birim": str(entry.get("birim", "")).strip(),
+            }
+        )
+    df = pd.DataFrame(rows, columns=columns).sort_values("tarih") if rows else pd.DataFrame(columns=columns)
+    return df, errors
 
 
-def load_exclusions() -> tuple[pd.DataFrame, list[str]]:
-    """(baslangic, bitis, baslik, aciklama) tablosu ve hata mesajları döner.
+def load_events() -> tuple[pd.DataFrame, list[str]]:
+    """Önemli tarihler: (tarih, baslik, aciklama, birim) tablosu ve hata mesajları."""
+    return _load_day_entries(EVENTS_PATH, "tarih")
 
-    Her kayıt ya tek gün (`gun`) ya da aralık (`baslangic` + `bitis`, iki gün de dahil) olabilir.
-    """
-    empty = pd.DataFrame(columns=["baslangic", "bitis", "baslik", "aciklama"])
-    entries, errors = _read_entries(EXCLUSIONS_PATH, "haric")
+
+def _load_range_entries(path: Path, key: str) -> tuple[pd.DataFrame, list[str]]:
+    """Tek gün (`gun`) ya da aralık (`baslangic` + `bitis`, iki gün de dahil) kayıtlarını okur."""
+    columns = ["baslangic", "bitis", "baslik", "aciklama", "birim"]
+    entries, errors = _read_entries(path, key)
 
     rows = []
     for i, entry in enumerate(entries, start=1):
@@ -66,17 +78,34 @@ def load_exclusions() -> tuple[pd.DataFrame, list[str]]:
             start, end = _parse_day(entry.get("baslangic")), _parse_day(entry.get("bitis"))
         if pd.isna(start) or pd.isna(end) or not title:
             errors.append(
-                f"{EXCLUSIONS_PATH.name}, {i}. kayıt atlandı: 'gun' ya da 'baslangic' + 'bitis' "
+                f"{path.name}, {i}. kayıt atlandı: 'gun' ya da 'baslangic' + 'bitis' "
                 "(GG.AA.YYYY) ve 'baslik' zorunlu."
             )
             continue
         if end < start:
-            errors.append(f"{EXCLUSIONS_PATH.name}, {i}. kayıt atlandı: 'bitis', 'baslangic' tarihinden önce.")
+            errors.append(f"{path.name}, {i}. kayıt atlandı: 'bitis', 'baslangic' tarihinden önce.")
             continue
         rows.append(
-            {"baslangic": start, "bitis": end, "baslik": title, "aciklama": str(entry.get("aciklama", "")).strip()}
+            {
+                "baslangic": start,
+                "bitis": end,
+                "baslik": title,
+                "aciklama": str(entry.get("aciklama", "")).strip(),
+                "birim": str(entry.get("birim", "")).strip(),
+            }
         )
-    return (pd.DataFrame(rows).sort_values("baslangic") if rows else empty), errors
+    df = pd.DataFrame(rows, columns=columns).sort_values("baslangic") if rows else pd.DataFrame(columns=columns)
+    return df, errors
+
+
+def load_actions() -> tuple[pd.DataFrame, list[str]]:
+    """İş birimi aksiyonları (tek gün ya da aralık): (baslangic, bitis, baslik, aciklama, birim) tablosu."""
+    return _load_range_entries(ACTIONS_PATH, "aksiyon")
+
+
+def load_exclusions() -> tuple[pd.DataFrame, list[str]]:
+    """Hariç tutulan tarihler (tek gün ya da aralık): (baslangic, bitis, baslik, aciklama, birim) tablosu."""
+    return _load_range_entries(EXCLUSIONS_PATH, "haric")
 
 
 def overlaps_exclusion(df: pd.DataFrame, exclusions: pd.DataFrame) -> pd.Series:

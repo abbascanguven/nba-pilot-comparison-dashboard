@@ -10,6 +10,7 @@ PILOT_COLOR = "#2a78d6"
 NBA_COLOR = "#eb6834"
 NEUTRAL_COLOR = "#a3a29c"
 EVENT_COLOR = "#4a3aa7"
+ACTION_COLOR = "#e69500"  # kehribar: uyarı hissi, hariç tutmanın kırmızısından ayrı
 EXCLUSION_COLOR = "#d03b3b"
 
 VERDICT_COLORS = {
@@ -159,47 +160,81 @@ def _mark_reference(
     )
 
 
-def _mark_events(fig: go.Figure, events: pd.DataFrame | None, daily: pd.DataFrame, y_col: str) -> None:
-    """Önemli tarihleri dikey çizgi + 📌 etiketiyle işaretler; üzerine gelince açıklama görünür."""
-    if events is None or events.empty or daily.empty:
-        return
+# Simge satırları: her işaret türü çizim alanının üstünde kendi satırında durur, böylece farklı
+# türler aynı güne düşse de çakışmaz. Satır yüksekliği piksel cinsindendir.
+ICON_ROW_PX = 18
+ICON_ROWS = 3  # 📌 önemli tarih, ⛔ hariç tutulan tarih, ⚠️ iş birimi aksiyonu
+# Aynı satırdaki iki simge, gösterilen tarih aralığının bu oranından daha yakınsa tek simgede birleşir
+# (≈ 16 piksel simge ÷ ~600 piksel çizim alanı; 30 günde ardışık günler ayrı kalır, 365 günde ~10 günden
+# yakın simgeler birleşir).
+ICON_MERGE_FRACTION = 0.028
+
+IconItem = tuple[pd.Timestamp, str]  # (simgenin x konumu, üzerine gelince görünecek metin)
+
+
+def _mark_day_markers(
+    fig: go.Figure,
+    entries: pd.DataFrame | None,
+    daily: pd.DataFrame,
+    y_col: str,
+    *,
+    color: str,
+    icon: str,
+    dash: str,
+) -> list[IconItem]:
+    """Tek günlük kayıtlar için dikey çizgi ve hover notu çizer; simge konumlarını döner."""
+    if entries is None or entries.empty or daily.empty:
+        return []
     lo, hi = daily["LAST_OFFER_DATE"].min(), daily["LAST_OFFER_DATE"].max()
-    ev = events[events["tarih"].between(lo, hi)]
+    ev = entries[entries["tarih"].between(lo, hi)]
     if ev.empty:
-        return
+        return []
 
     def describe(g: pd.DataFrame) -> str:
         return "<br>".join(
-            f"<b>{r.baslik}</b>" + (f"<br>{r.aciklama}" if r.aciklama else "") for r in g.itertuples()
+            f"<b>{r.baslik}</b>"
+            + (f" · {r.birim}" if getattr(r, "birim", "") else "")
+            + (f"<br>{r.aciklama}" if r.aciklama else "")
+            for r in g.itertuples()
         )
 
     by_day = ev.groupby("tarih").apply(describe, include_groups=False)
-    for day, text in by_day.items():
+    for day in by_day.index:
         fig.add_shape(
             type="line", x0=day, x1=day, y0=0, y1=1, yref="paper",
-            line=dict(color=EVENT_COLOR, width=1, dash="dash"), opacity=0.6,
-        )
-        fig.add_annotation(
-            x=day, y=1, yref="paper", yanchor="bottom", text="📌", showarrow=False,
-            hovertext=f"{day:%d.%m.%Y}<br>{text}", font=dict(size=14),
+            line=dict(color=color, width=1.5, dash=dash), opacity=0.7,
         )
     # Günün üzerine gelindiğinde birleşik hover kutusunda da açıklama görünsün.
     points = daily.set_index("LAST_OFFER_DATE")[y_col].reindex(by_day.index)
     fig.add_scatter(
-        x=by_day.index, y=points.values, mode="markers", name="📌 Önemli tarih",
+        x=by_day.index, y=points.values, mode="markers", name=icon,
         marker=dict(size=1, opacity=0), showlegend=False,
-        customdata=by_day.values, hovertemplate="📌 %{customdata}<extra></extra>",
+        customdata=by_day.values, hovertemplate=icon + " %{customdata}<extra></extra>",
     )
+    return [(day, f"{icon} {day:%d.%m.%Y}<br>{text}") for day, text in by_day.items()]
 
 
-def _mark_exclusions(fig: go.Figure, exclusions: pd.DataFrame | None, daily: pd.DataFrame, y_col: str) -> None:
-    """Hariç tutulan tarihleri kırmızıyla işaretler: tek gün çizgi, aralık gölgeli bant; ⛔ üzerinde açıklama."""
-    if exclusions is None or exclusions.empty or daily.empty:
-        return
+def _mark_ranges(
+    fig: go.Figure,
+    entries: pd.DataFrame | None,
+    daily: pd.DataFrame,
+    y_col: str,
+    *,
+    color: str,
+    icon: str,
+    prefix: str,
+) -> list[IconItem]:
+    """Tek gün ya da aralık kayıtlarını çizer (tek gün kesikli çizgi, aralık gölgeli bant + kenar çizgileri).
+
+    Kapsanan günlerin birleşik hover kutusuna not ekler ve simge konumlarını (aralığın ortası) döner.
+    """
+    if entries is None or entries.empty or daily.empty:
+        return []
     lo, hi = daily["LAST_OFFER_DATE"].min(), daily["LAST_OFFER_DATE"].max()
     half_day = pd.Timedelta(hours=12)
+    items: list[IconItem] = []
     hover_x, hover_y, hover_text = [], [], []
-    for r in exclusions.itertuples():
+    for r in entries.itertuples():
         if r.bitis < lo or r.baslangic > hi:
             continue
         start, end = max(r.baslangic, lo), min(r.bitis, hi)
@@ -207,37 +242,73 @@ def _mark_exclusions(fig: go.Figure, exclusions: pd.DataFrame | None, daily: pd.
             f"{r.baslangic:%d.%m.%Y}" if r.baslangic == r.bitis
             else f"{r.baslangic:%d.%m.%Y} – {r.bitis:%d.%m.%Y}"
         )
-        text = f"<b>⛔ Hariç: {r.baslik}</b> ({span})" + (f"<br>{r.aciklama}" if r.aciklama else "")
+        text = (
+            f"<b>{icon} {prefix}{r.baslik}</b> ({span})"
+            + (f" · {r.birim}" if getattr(r, "birim", "") else "")
+            + (f"<br>{r.aciklama}" if r.aciklama else "")
+        )
         if start == end:
             fig.add_shape(
                 type="line", x0=start, x1=start, y0=0, y1=1, yref="paper",
-                line=dict(color=EXCLUSION_COLOR, width=2, dash="dash"),
+                line=dict(color=color, width=2, dash="dash"),
             )
         else:
             fig.add_shape(
                 type="rect", x0=start - half_day, x1=end + half_day, y0=0, y1=1, yref="paper",
-                fillcolor=EXCLUSION_COLOR, opacity=0.10, line=dict(width=0), layer="below",
+                fillcolor=color, opacity=0.12, line=dict(width=0), layer="below",
             )
             for edge in (start - half_day, end + half_day):
                 fig.add_shape(
                     type="line", x0=edge, x1=edge, y0=0, y1=1, yref="paper",
-                    line=dict(color=EXCLUSION_COLOR, width=1.5, dash="dash"),
+                    line=dict(color=color, width=1.5, dash="dash"),
                 )
-        fig.add_annotation(
-            x=start + (end - start) / 2, y=1, yref="paper", yanchor="bottom", text="⛔", showarrow=False,
-            hovertext=text, font=dict(size=13),
-        )
-        # Veri hesaplamaya dahilse, o günlerin birleşik hover kutusunda da not görünsün.
+        items.append((start + (end - start) / 2, text))
+        # Veri gösteriliyorsa, kapsanan günlerin birleşik hover kutusunda da not görünsün.
         covered = daily[daily["LAST_OFFER_DATE"].between(r.baslangic, r.bitis)].dropna(subset=[y_col])
         hover_x += covered["LAST_OFFER_DATE"].tolist()
         hover_y += covered[y_col].tolist()
         hover_text += [text] * len(covered)
     if hover_x:
         fig.add_scatter(
-            x=hover_x, y=hover_y, mode="markers", name="⛔ Hariç tutulan tarih",
+            x=hover_x, y=hover_y, mode="markers", name=icon,
             marker=dict(size=1, opacity=0), showlegend=False,
             customdata=hover_text, hovertemplate="%{customdata}<extra></extra>",
         )
+    return items
+
+
+def _cluster_icons(items: list[IconItem], min_gap: pd.Timedelta) -> list[tuple[pd.Timestamp, int, str]]:
+    """Birbirine `min_gap`'ten yakın simgeleri tek simgede birleştirir: (x, adet, birleşik metin)."""
+    clusters: list[list[IconItem]] = []
+    for item in sorted(items, key=lambda it: it[0]):
+        if clusters and item[0] - clusters[-1][-1][0] < min_gap:
+            clusters[-1].append(item)
+        else:
+            clusters.append([item])
+    result = []
+    for group in clusters:
+        xs = [x for x, _ in group]
+        center = xs[0] + (xs[-1] - xs[0]) / 2
+        result.append((center, len(group), "<br><br>".join(text for _, text in group)))
+    return result
+
+
+def _place_icons(
+    fig: go.Figure, rows: list[tuple[str, list[IconItem]]], lo: pd.Timestamp, hi: pd.Timestamp
+) -> None:
+    """Simgeleri tür başına ayrı satıra yerleştirir; aynı satırda çakışacak simgeleri birleştirir."""
+    min_gap = max((hi - lo) * ICON_MERGE_FRACTION, pd.Timedelta(hours=12))
+    row = 0
+    for icon, items in rows:
+        if not items:
+            continue
+        for x, count, text in _cluster_icons(items, min_gap):
+            fig.add_annotation(
+                x=x, y=1, yref="paper", yanchor="bottom", yshift=ICON_ROW_PX * row,
+                text=icon if count == 1 else f"{icon}<sup>{count}</sup>",
+                showarrow=False, hovertext=text, font=dict(size=13),
+            )
+        row += 1
 
 
 def _decorate(
@@ -247,11 +318,24 @@ def _decorate(
     ref_date: pd.Timestamp | tuple[pd.Timestamp, pd.Timestamp] | None,
     events: pd.DataFrame | None,
     exclusions: pd.DataFrame | None,
+    actions: pd.DataFrame | None = None,
 ) -> None:
-    """Zaman grafiklerine referans günü, hariç tutulan tarihler ve önemli tarih işaretlerini ekler."""
+    """Zaman grafiklerine referans, önemli tarih, hariç tutulan tarih ve iş birimi aksiyonu işaretlerini ekler."""
     _mark_reference(fig, ref_date, daily)
-    _mark_exclusions(fig, exclusions, daily, y_col)
-    _mark_events(fig, events, daily, y_col)
+    event_icons = _mark_day_markers(fig, events, daily, y_col, color=EVENT_COLOR, icon="📌", dash="dash")
+    exclusion_icons = _mark_ranges(
+        fig, exclusions, daily, y_col, color=EXCLUSION_COLOR, icon="⛔", prefix="Hariç: "
+    )
+    action_icons = _mark_ranges(
+        fig, actions, daily, y_col, color=ACTION_COLOR, icon="⚠️", prefix="İş birimi: "
+    )
+    if not daily.empty:
+        _place_icons(
+            fig,
+            [("📌", event_icons), ("⛔", exclusion_icons), ("⚠️", action_icons)],
+            daily["LAST_OFFER_DATE"].min(),
+            daily["LAST_OFFER_DATE"].max(),
+        )
 
 
 def time_lines(
@@ -264,6 +348,7 @@ def time_lines(
     ref_date: pd.Timestamp | tuple[pd.Timestamp, pd.Timestamp] | None = None,
     events: pd.DataFrame | None = None,
     exclusions: pd.DataFrame | None = None,
+    actions: pd.DataFrame | None = None,
 ) -> go.Figure:
     """Pilot ve NBA için `{side}_{metric}` kolonlarının günlük seyri."""
     fig = go.Figure()
@@ -293,12 +378,12 @@ def time_lines(
         )
     fig.update_xaxes(tickformat="%d.%m", hoverformat="%d.%m.%Y", title=None)
     fig.update_yaxes(title=y_title, tickformat=y_format, rangemode="tozero" if from_zero else "normal")
-    _decorate(fig, daily, f"pilot_{metric}", ref_date, events, exclusions)
-    fig = _layout(fig, height=380, hovermode="x unified")
+    _decorate(fig, daily, f"pilot_{metric}", ref_date, events, exclusions, actions)
+    fig = _layout(fig, height=420, hovermode="x unified")
     # Lejant figürün en üstüne, 📌 işaretleri onun altında çizim alanının üst kenarına oturur;
     # böylece erken bir önemli tarih lejantla çakışmaz.
     fig.update_layout(
-        margin=dict(t=64, r=50),
+        margin=dict(t=30 + 24 + ICON_ROW_PX * ICON_ROWS, r=50),
         legend=dict(yref="container", y=1, yanchor="top", x=0, xanchor="left"),
     )
     return fig
@@ -309,6 +394,7 @@ def lift_line(
     ref_date: pd.Timestamp | tuple[pd.Timestamp, pd.Timestamp] | None = None,
     events: pd.DataFrame | None = None,
     exclusions: pd.DataFrame | None = None,
+    actions: pd.DataFrame | None = None,
 ) -> go.Figure:
     """Günlük satış lift (Pilot oranı / NBA oranı); 1 çizgisi eşitlik."""
     fig = go.Figure()
@@ -326,9 +412,9 @@ def lift_line(
                   annotation_text="Eşit (1,0)", annotation_position="bottom right")
     fig.update_xaxes(tickformat="%d.%m", hoverformat="%d.%m.%Y", title=None)
     fig.update_yaxes(title="Satış lift", tickformat=".2f")
-    _decorate(fig, daily, "satis_lift", ref_date, events, exclusions)
-    fig = _layout(fig, height=300, hovermode="x unified")
-    fig.update_layout(margin=dict(t=40))  # 📌 işaretlerine yer
+    _decorate(fig, daily, "satis_lift", ref_date, events, exclusions, actions)
+    fig = _layout(fig, height=320, hovermode="x unified")
+    fig.update_layout(margin=dict(t=10 + ICON_ROW_PX * ICON_ROWS))  # 📌 / ⛔ / ⚠️ simge satırlarına yer
     return fig
 
 
@@ -337,6 +423,7 @@ def count_diff_line(
     ref_date: pd.Timestamp | tuple[pd.Timestamp, pd.Timestamp] | None = None,
     events: pd.DataFrame | None = None,
     exclusions: pd.DataFrame | None = None,
+    actions: pd.DataFrame | None = None,
 ) -> go.Figure:
     """Günlük satış adet farkı (Pilot − NBA); 0 çizgisinin üstü Pilot, altı NBA lehine."""
     d = daily.copy()
@@ -362,7 +449,7 @@ def count_diff_line(
     fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="rgba(128,128,128,0.7)")
     fig.update_xaxes(tickformat="%d.%m", hoverformat="%d.%m.%Y", title=None)
     fig.update_yaxes(title="Pilot − NBA satış adedi", tickformat="+,d")
-    _decorate(fig, d, "satis_adet_farki", ref_date, events, exclusions)
-    fig = _layout(fig, height=300, hovermode="x unified")
-    fig.update_layout(margin=dict(t=40))  # 📌 işaretlerine yer
+    _decorate(fig, d, "satis_adet_farki", ref_date, events, exclusions, actions)
+    fig = _layout(fig, height=320, hovermode="x unified")
+    fig.update_layout(margin=dict(t=10 + ICON_ROW_PX * ICON_ROWS))  # 📌 / ⛔ / ⚠️ simge satırlarına yer
     return fig

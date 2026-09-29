@@ -1,0 +1,34 @@
+# Grafiklerde işaretlenecek iş birimi aksiyonları (kampanya, fiyat değişikliği, kanal aksiyonu vb.).
+#
+# Her kayıt için [[aksiyon]] bloğu ekleyin. Tek gün için `gun`, bir dönem için `baslangic` + `bitis` yazın:
+#   gun        : "GG.AA.YYYY"  (tek günlük aksiyon)
+#   baslangic  : "GG.AA.YYYY"  (dönemin ilk günü, dahil)
+#   bitis      : "GG.AA.YYYY"  (dönemin son günü, dahil)
+#   baslik     : kısa başlık (zorunlu)
+#   birim      : aksiyonu yapan iş birimi (isteğe bağlı), ör. "Kartlı Ödemeler"
+#   aciklama   : fareyle üzerine gelince görünen detay (isteğe bağlı)
+#
+# Tarihler mutlaka tırnak içinde yazılmalı. Tek bir yazım hatası dosyanın tamamının okunmamasına yol açar.
+# Grafiklerde kehribar (sarı-turuncu) renk ve ⚠️ simgesiyle gösterilir. Hesaplamaları etkilemez.
+# Dosya her sayfa yenilemesinde tekrar okunur; değişiklik için uygulamayı yeniden başlatmak gerekmez.
+# Aşağıdaki kayıtlar ÖRNEKTİR, kendi aksiyonlarınızla değiştirin veya silin.
+
+[[aksiyon]]
+baslangic = "01.09.2026"
+bitis = "07.09.2026"
+baslik = "Örnek: Kredi kartı aidat kampanyası"
+birim = "Kartlı Ödemeler"
+aciklama = "Yeni müşterilere ilk yıl aidatsız kart kampanyası bir hafta boyunca yayında kaldı."
+
+[[aksiyon]]
+baslangic = "13.09.2026"
+bitis = "16.09.2026"
+baslik = "Örnek: Dijital kanal push bildirimi kampanyası"
+birim = "Dijital Bankacılık"
+aciklama = "Mobil uygulamada 4 gün boyunca yoğun push bildirimi gönderildi; yanıt sayılarında artış beklenir."
+
+[[aksiyon]]
+gun = "17.09.2026"
+baslik = "Örnek: Mevduat faiz oranı güncellemesi"
+birim = "Hazine"
+aciklama = "Vadeli mevduat faiz oranları 1 puan artırıldı."
