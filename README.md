@@ -207,8 +207,18 @@ Sayfa değiştirdiğinizde bu filtrelerin seçimleri korunur.
 - **Sekmeler:**
   - *Aksiyon grupları*: Her grubun Pilot satış oranının NBA'ya göre yüzde farkı. Mavi: Pilot anlamlı olarak daha iyi, turuncu: NBA anlamlı olarak daha iyi, gri: fark istatistiksel olarak anlamlı değil.
   - *Pilot ve NBA oranları*: Her aksiyon grubu bir nokta. Kesikli çizginin üstünde kalan gruplarda Pilot daha iyi.
-  - *AG grup kodu bazında*: Her aksiyon grup kodu için Pilot ve NBA satış oranları yan yana (grafik + tablo).
-  - *Detay tablo*: Tüm metrikler. Sonuca göre filtrelenebilir ve CSV olarak indirilebilir.
+  - *AG grup kodu bazında*: Her aksiyon grup kodu için Pilot ve NBA satış oranları yan yana (grafik + tablo). Tabloda bağlı olduğu **Model** kolonu vardır.
+  - *Detay tablo*: Tüm metrikler, **Model** kolonu dahil. CSV olarak indirilebilir. Tablonun üstünde kendi filtreleri vardır:
+    - **Ara:** Kodda ya da aksiyon grubu adında geçen metin (ör. `2015` ya da `kredi kartı`). Büyük/küçük harf fark etmez, Türkçe `İ/ı` doğru eşleşir.
+    - **Model:** Bir veya birden fazla model.
+    - **Sonuç:** Pilot daha iyi / NBA daha iyi / Fark anlamlı değil / Satış yok / Karşılaştırma yok.
+    - **Satış lift aralığı:** Lift değeri bu aralıkta olan gruplar. Yanındaki **Lift'i hesaplanamayanları da göster** kutusu, lift değeri boş olan grupların (NBA satış oranı 0 ya da karşılaştırma yok) tabloda kalıp kalmayacağını belirler.
+
+    Filtreler birlikte uygulanır. Tablonun üstünde kaç grubun gösterildiği yazar (ör. `9 / 84 aksiyon grubu gösteriliyor`). **CSV indir** filtrelenmiş tabloyu, dip toplam satırıyla birlikte indirir. Bu filtreler yalnızca Detay tabloyu etkiler; kartlar, sayaçlar ve diğer sekmeler değişmez.
+
+    Tablonun en altında kalın ve renkli bir **DİP TOPLAM** satırı vardır. Filtreler değiştikçe yalnızca görünen gruplardan yeniden hesaplanır (hesaplama için bkz. 7.9).
+
+  Üç grafikte de (Aksiyon grupları, Pilot ve NBA oranları, AG grup kodu bazında) bir çubuğun ya da noktanın üzerine gelince aksiyon grubunun bağlı olduğu model de görünür. Modeli olmayan gruplar `(Model yok)` olarak gösterilir.
 
 ---
 
@@ -577,7 +587,26 @@ Tutulan gruplar: min_yanıtlayan ≥ eşik
 | **Aksiyon grupları** | Her çubuk `(satış lift − 1) × 100` (%) değeridir. Lift'i boş olan gruplar (Karşılaştırma yok, Satış yok) gösterilmez. Pilot satışı 0, NBA satışı 0'dan büyük olan gruplar −%100'de görünür. Renk, 7.6'daki etikete göre verilir. |
 | **Pilot ve NBA oranları** | x = NBA satış oranı, y = Pilot satış oranı, iki eksen de logaritmiktir. Oranlardan biri 0 olan gruplar log ölçekte gösterilemediği için dışarıda kalır. Nokta boyutu: `8 + 32 × √(P yanıtlayan + N yanıtlayan) / √(en büyük toplam)`. Kesikli çizgi y = x (eşit oran) çizgisidir. |
 | **AG grup kodu bazında** | Her kod için Pilot ve NBA satış oranı yan yana. En çok Pilot yanıtlayanı olan kod üstte. Grafikteki etiketler 45 karakterde kesilir, tabloda tam açıklama görünür. |
-| **Detay tablo** | Tüm metrikler. Üstteki **Sonuç** filtresi yalnızca bu tabloyu süzer, kartları ve grafikleri etkilemez. |
+| **Detay tablo** | Tüm metrikler. Üstteki **Ara**, **Model**, **Sonuç** ve **Satış lift aralığı** filtreleri "VE" mantığıyla birlikte uygulanır ve yalnızca bu tabloyu (ve CSV indirmesini) süzer; kartları, sayaçları ve grafikleri etkilemez. Lift aralığı filtresi, lift değeri boş olan grupları **Lift'i hesaplanamayanları da göster** kutusuna göre tutar ya da atar. En altta **dip toplam** satırı vardır (aşağıya bakın). |
+
+**Detay tablodaki dip toplam satırı**
+
+Filtrelerden sonra tabloda kalan grupların toplamıdır. Özet kartlarıyla aynı yöntemle (7.3) hesaplanır: adet kolonları toplanır, oran ve lift kolonları bu toplamlardan yeniden hesaplanır. Oranların ortalaması alınmaz.
+
+| Kolon | Dip toplamda |
+|---|---|
+| Kod / Aksiyon grubu / Model | `Σ` / `DİP TOPLAM (N grup)` / `M model` |
+| Pilot/NBA yanıtlayan, olumlu, satış | Görünen grupların **toplamı** |
+| Pilot/NBA satış oranı | `Σ satış / Σ yanıtlayan` |
+| Pilot/NBA olumlu oranı | `Σ olumlu / Σ yanıtlayan` |
+| Satış lift / Olumlu lift | Toplamdan hesaplanan Pilot oranı / NBA oranı |
+| Adet farkı | `Σ P satış − Σ N satış` |
+| Oran bazlı ek satış | `Σ P satış − Σ P yanıtlayan × (toplam N satış oranı)`. Grupların ek satışlarının toplamına eşit değildir (bkz. 7.9 notu). |
+| p-değeri / Sonuç | Toplam adetler üzerinden z-testi ve 7.6'daki etiket |
+
+Örnek (sentetik test verisi, 22.09.2026, 1 günlük, Tekil, arama = `kredi kartı`, 9 grup): Pilot 1.027 satış / 105.489 yanıtlayan = %0,97, NBA %0,98, satış lift **0,992**, olumlu lift 0,955, adet farkı +7.
+
+Tüm filtreler boşken dip toplam, sayfanın üstündeki özet kartlarıyla aynı değerleri verir. Kolon başlığına tıklayıp sıraladığınızda dip toplam satırı da diğer satırlarla birlikte sıralanır, en altta kalmayabilir.
 
 ### 7.10 Biçimlendirme ve dışa aktarma
 

@@ -21,6 +21,7 @@ VERDICT_COLORS = {
 
 _HOVER = (
     "<b>%{customdata[0]}</b><br>"
+    "Model: %{customdata[10]}<br>"
     "Pilot: %{customdata[1]:,} yanıt · %{customdata[2]:,} satış · %{customdata[3]:.3%}<br>"
     "NBA: %{customdata[4]:,} yanıt · %{customdata[5]:,} satış · %{customdata[6]:.3%}<br>"
     "Satış lift: %{customdata[7]:.3f} · p = %{customdata[8]:.3f}"
@@ -29,6 +30,7 @@ _HOVER = (
 _HOVER_COLS = [
     "ACTION_GROUP_DESC", "pilot_yanitlayan", "pilot_satis", "pilot_satis_oran",
     "nba_yanitlayan", "nba_satis", "nba_satis_oran", "satis_lift", "p_degeri", "sonuc",
+    "MEVCUT_MODEL_KIMLIGI",
 ]
 
 
@@ -104,8 +106,11 @@ def rate_scatter(groups: pd.DataFrame) -> go.Figure:
     return _layout(fig, height=520)
 
 
-def rate_bars(d: pd.DataFrame, label_col: str) -> go.Figure:
-    """`label_col` kategorileri için Pilot ve NBA satış oranı yan yana (en kalabalık üstte)."""
+def rate_bars(d: pd.DataFrame, label_col: str, model_col: str | None = None) -> go.Figure:
+    """`label_col` kategorileri için Pilot ve NBA satış oranı yan yana (en kalabalık üstte).
+
+    model_col verilirse, çubuğun üzerine gelince bağlı olduğu model de gösterilir.
+    """
     d = d.sort_values("pilot_yanitlayan")
     fig = go.Figure()
     # Yatay gruplu çubukta ilk iz altta çizilir; Pilot üstte görünsün diye NBA önce eklenir.
@@ -116,8 +121,12 @@ def rate_bars(d: pd.DataFrame, label_col: str) -> go.Figure:
             orientation="h",
             name=name,
             marker=dict(color=color, cornerradius=4),
-            customdata=d[[f"{side}_yanitlayan", f"{side}_satis"]].to_numpy(),
-            hovertemplate="%{y}<br>" + name + ": %{x:.3%} (%{customdata[1]:,} / %{customdata[0]:,})<extra></extra>",
+            customdata=d[[f"{side}_yanitlayan", f"{side}_satis"] + ([model_col] if model_col else [])].to_numpy(),
+            hovertemplate=(
+                "%{y}<br>"
+                + ("Model: %{customdata[2]}<br>" if model_col else "")
+                + name + ": %{x:.3%} (%{customdata[1]:,} / %{customdata[0]:,})<extra></extra>"
+            ),
         )
     fig.update_xaxes(title="Satış oranı", tickformat=".2%")
     fig.update_yaxes(categoryorder="array", categoryarray=d[label_col].tolist())

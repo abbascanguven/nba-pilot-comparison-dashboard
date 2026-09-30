@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import numpy as np
+import pandas as pd
 import streamlit as st
 
 from nba_dashboard import charts
 from nba_dashboard.context import Context
 from nba_dashboard.data import NO_MODEL_LABEL
 from nba_dashboard.formatting import fmt_change, fmt_int, fmt_num, fmt_pct, fmt_points
-from nba_dashboard.metrics import compare, verdict
+from nba_dashboard.metrics import compare, total_of, verdict
 
 GROUP_KEYS = ["ACTION_GROUP_CODE", "ACTION_GROUP_DESC", "MEVCUT_MODEL_KIMLIGI", "MODEL_FLAG"]
 
@@ -139,10 +141,10 @@ def render(ctx: Context) -> None:
         by_code["etiket"] = by_code["ACTION_GROUP_CODE"] + " · " + by_code["ACTION_GROUP_DESC"].str.slice(0, 45)
         st.subheader("AG grup kodu bazında satış oranları")
         st.caption("Pilot ve NBA satış oranları yan yana. En çok yanıtlayanı olan kodlar üstte.")
-        st.plotly_chart(charts.rate_bars(by_code, "etiket"), width="stretch")
+        st.plotly_chart(charts.rate_bars(by_code, "etiket", model_col="MEVCUT_MODEL_KIMLIGI"), width="stretch")
         st.dataframe(
             by_code.sort_values("pilot_yanitlayan", ascending=False)[
-                ["ACTION_GROUP_CODE", "ACTION_GROUP_DESC", "pilot_yanitlayan", "nba_yanitlayan",
+                ["ACTION_GROUP_CODE", "ACTION_GROUP_DESC", "MEVCUT_MODEL_KIMLIGI", "pilot_yanitlayan", "nba_yanitlayan",
                  "pilot_satis", "nba_satis", "pilot_satis_oran", "nba_satis_oran", "satis_lift",
                  "oran_bazli_ek_satis", "p_degeri", "sonuc"]
             ],
@@ -152,23 +154,102 @@ def render(ctx: Context) -> None:
         )
 
     with tab_table:
-        verdict_filter = st.multiselect(
-            "Sonuç", sorted(groups["sonuc"].unique()), placeholder="Tüm sonuçlar"
-        )
-        table = groups if not verdict_filter else groups[groups["sonuc"].isin(verdict_filter)]
+        table = _filter_detail_table(groups)
         table = table.sort_values("pilot_yanitlayan", ascending=False)[
             ["ACTION_GROUP_CODE", "ACTION_GROUP_DESC", "MEVCUT_MODEL_KIMLIGI",
              "pilot_yanitlayan", "nba_yanitlayan", "pilot_olumlu", "nba_olumlu", "pilot_satis", "nba_satis",
              "pilot_satis_oran", "nba_satis_oran", "satis_lift", "pilot_olumlu_oran", "nba_olumlu_oran",
              "olumlu_lift", "satis_adet_farki", "oran_bazli_ek_satis", "p_degeri", "sonuc"]
         ]
-        st.dataframe(table, hide_index=True, width="stretch", height=600, column_config=COLUMN_CONFIG)
+        st.caption(
+            f"{len(table)} / {len(groups)} aksiyon grubu gösteriliyor · En alttaki **dip toplam** satırı "
+            "filtrelenmiş gruplardan hesaplanır: adetler toplanır, oran/lift/ek satış/p-değeri toplamdan yeniden hesaplanır."
+        )
+        shown = _with_total_row(table)
+        st.dataframe(
+            _highlight_last_row(shown) if len(shown) > len(table) else shown,
+            hide_index=True,
+            width="stretch",
+            height=600,
+            column_config=COLUMN_CONFIG,
+        )
         st.download_button(
             "Excel için CSV indir",
-            table.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+            shown.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
             file_name=f"nba_pilot_{ctx.basis.lower()}.csv",
             mime="text/csv",
+            help="Tablonun filtrelenmiş hali, dip toplam satırıyla birlikte indirilir.",
         )
 
     if NO_MODEL_LABEL in groups["MEVCUT_MODEL_KIMLIGI"].values:
         st.caption(f"“{NO_MODEL_LABEL}”: MEVCUT_MODEL_KIMLIGI boş olan aksiyon grupları (MODEL_FLAG = 0).")
+
+
+def _tr_lower(text: str) -> str:
+    """Türkçe büyük/küçük harf duyarsız arama için (İ → i, I → ı)."""
+    return text.replace("İ", "i").replace("I", "ı").lower()
+
+
+def _filter_detail_table(groups: pd.DataFrame) -> pd.DataFrame:
+    """Detay tablo sekmesinin kendi filtreleri. Yalnızca tabloyu ve CSV indirmesini etkiler."""
+    c1, c2, c3 = st.columns([2, 2, 2])
+    query = c1.text_input(
+        "Ara (kod ya da aksiyon grubu)",
+        placeholder="ör. 2015 ya da kredi kartı",
+        help="Kodda ya da aksiyon grubu adında geçen metne göre süzer. Büyük/küçük harf fark etmez.",
+    )
+    models = c2.multiselect(
+        "Model", sorted(groups["MEVCUT_MODEL_KIMLIGI"].unique()), placeholder="Tüm modeller"
+    )
+    verdicts = c3.multiselect("Sonuç", sorted(groups["sonuc"].unique()), placeholder="Tüm sonuçlar")
+
+    table = groups
+    if query.strip():
+        q = _tr_lower(query.strip())
+        haystack = (table["ACTION_GROUP_CODE"] + " " + table["ACTION_GROUP_DESC"]).map(_tr_lower)
+        table = table[haystack.str.contains(q, regex=False)]
+    if models:
+        table = table[table["MEVCUT_MODEL_KIMLIGI"].isin(models)]
+    if verdicts:
+        table = table[table["sonuc"].isin(verdicts)]
+
+    lifts = groups["satis_lift"].dropna()
+    if len(lifts) > 1 and lifts.min() < lifts.max():
+        lo, hi = float(np.floor(lifts.min() * 100) / 100), float(np.ceil(lifts.max() * 100) / 100)
+        c4, c5 = st.columns([4, 2])
+        lift_range = c4.slider(
+            "Satış lift aralığı", min_value=lo, max_value=hi, value=(lo, hi), step=0.01, format="%.2f",
+            help="1'in üstü Pilot, altı NBA lehine.",
+        )
+        keep_missing = c5.checkbox(
+            "Lift'i hesaplanamayanları da göster",
+            value=True,
+            help="NBA satış oranı 0 olan ya da karşılaştırması olmayan gruplar (lift boş).",
+        )
+        in_range = table["satis_lift"].between(*lift_range)
+        table = table[in_range | (table["satis_lift"].isna() & keep_missing)]
+    return table
+
+
+def _with_total_row(table: pd.DataFrame) -> pd.DataFrame:
+    """Tablonun sonuna dip toplam satırı ekler (tablo boşsa olduğu gibi döner).
+
+    Adet kolonları toplanır; oranlar, lift'ler, farklar ve p-değeri toplam adetlerden yeniden hesaplanır
+    (kartlardaki toplamla aynı yöntem). Sıralama bozulmasın diye satır en sona eklenir.
+    """
+    if table.empty:
+        return table
+    total = total_of(table)
+    row = {col: total[col] if col in total.index else None for col in table.columns}
+    row["ACTION_GROUP_CODE"] = "Σ"
+    row["ACTION_GROUP_DESC"] = f"DİP TOPLAM ({len(table)} grup)"
+    row["MEVCUT_MODEL_KIMLIGI"] = f"{table['MEVCUT_MODEL_KIMLIGI'].nunique()} model"
+    row["sonuc"] = verdict(total)
+    return pd.concat([table.reset_index(drop=True), pd.DataFrame([row])], ignore_index=True)
+
+
+def _highlight_last_row(df: pd.DataFrame):
+    """Dip toplam satırını kalın ve hafif renkli gösterir."""
+    last = len(df) - 1
+    style = "font-weight: 700; background-color: rgba(42, 120, 214, 0.12)"
+    return df.style.apply(lambda r: [style if r.name == last else ""] * len(r), axis=1)

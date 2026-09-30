@@ -37,6 +37,11 @@ def _two_proportion_p(x1, n1, x2, n2) -> np.ndarray:
     return p
 
 
+COUNT_METRICS = [
+    f"{side}_{kind}" for side in ("pilot", "nba") for kind in ("yanitlayan", "olumlu", "satis")
+]
+
+
 def compare(df: pd.DataFrame, basis: str, by: list[str] | None = None) -> pd.DataFrame:
     """Pilot ve NBA metriklerini `by` kolonlarına göre (yoksa tek satır toplam) hesaplar.
 
@@ -52,7 +57,17 @@ def compare(df: pd.DataFrame, basis: str, by: list[str] | None = None) -> pd.Dat
     else:
         g = df[list(counts.values())].sum().to_frame().T
     g = g.rename(columns={v: k for k, v in counts.items()})
+    return _derive(g)
 
+
+def total_of(groups: pd.DataFrame) -> pd.Series:
+    """`compare` çıktısındaki satırların dip toplamı: adetler toplanır, oranlar toplamdan yeniden hesaplanır."""
+    g = groups[COUNT_METRICS].sum().to_frame().T
+    return _derive(g).iloc[0]
+
+
+def _derive(g: pd.DataFrame) -> pd.DataFrame:
+    """Adet kolonlarından (COUNT_METRICS) oran, lift, fark ve anlamlılık kolonlarını hesaplar."""
     g["pilot_satis_oran"] = _safe_div(g["pilot_satis"], g["pilot_yanitlayan"])
     g["nba_satis_oran"] = _safe_div(g["nba_satis"], g["nba_yanitlayan"])
     g["pilot_olumlu_oran"] = _safe_div(g["pilot_olumlu"], g["pilot_yanitlayan"])
